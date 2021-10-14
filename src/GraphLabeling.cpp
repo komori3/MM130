@@ -124,40 +124,58 @@ void init(istream& in) {
     }
 }
 
+bool used[10101010];
 bool dp[10101010];
 
 int main() {
     std::ios::sync_with_stdio(false);
     std::cin.tie(0);
 
+    //ifstream ifs("in/1.in");
+    //istream& in = ifs;
+
     init(cin);
 
-    // 完全グラフで構築
-    vector<int> xs({ 0 });
+    // 完全ではないグラフで構築
+    // bfs しながらやる
+    vector<int> ans({ 0 });
+
+    vector<int> node_val(num_nodes, -1);
+    queue<int> qu;
+    node_val[0] = 0;
+    used[0] = true;
     dp[0] = true;
-    for (int i = 1; i < num_nodes; i++) {
-        vector<int> offsets(xs);
-        reverse(offsets.begin(), offsets.end());
-        // abs(x - xs[i]) が 全部 false
-        int x = offsets.front() + 1;
-        for (;; x++) {
-            bool ok = true;
-            for (int offset : offsets) {
-                if (dp[x - offset]) {
-                    ok = false;
-                    break;
+    qu.push(0);
+    while (!qu.empty()) {
+        int u = qu.front(); qu.pop();
+        for (int v : adjlist[u]) {
+            if (node_val[v] != -1) continue; // visited
+            // v に隣接するノードで、used のものの値を取ってくる
+            vector<int> xs;
+            for (int w : adjlist[v]) if (node_val[w] != -1) xs.push_back(node_val[w]);
+            sort(xs.rbegin(), xs.rend());
+            int nx = xs.front() + 1;
+            for (;; nx++) {
+                if (used[nx]) continue;
+                bool ok = true;
+                for (int x : xs) {
+                    if (dp[nx - x]) {
+                        ok = false;
+                        break;
+                    }
                 }
+                if (ok) break;
             }
-            if (ok) {
-                break;
-            }
+            for (int x : xs) dp[nx - x] = true;
+            ans.push_back(nx);
+            used[nx] = true;
+            node_val[v] = nx;
+            qu.push(v);
         }
-        for (int offset : offsets) dp[x - offset] = true;
-        xs.push_back(x);
     }
 
     ostringstream out;
-    for (int x : xs) {
+    for (int x : node_val) {
         out << x << " ";
     }
 
