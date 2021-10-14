@@ -124,17 +124,19 @@ void init(istream& in) {
     }
 }
 
-bool used[10101010];
-bool dp[10101010];
+bool invalid[3000000];
+bool used[3000000];
+bool dp[3000000];
 
 int main() {
     std::ios::sync_with_stdio(false);
     std::cin.tie(0);
 
-    //ifstream ifs("in/1.in");
+    //ifstream ifs("in/2.in");
     //istream& in = ifs;
+    istream& in = cin;
 
-    init(cin);
+    init(in);
 
     // 完全ではないグラフで構築
     // bfs しながらやる
@@ -154,19 +156,30 @@ int main() {
             vector<int> xs;
             for (int w : adjlist[v]) if (node_val[w] != -1) xs.push_back(node_val[w]);
             sort(xs.rbegin(), xs.rend());
-            int nx = xs.front() + 1;
+
+            memset(invalid, 0, sizeof(invalid));
+            for (int i = 0; i < xs.size(); i++) {
+                for (int j = i; j < xs.size(); j++) {
+                    if ((xs[i] + xs[j]) % 2 == 0) {
+                        invalid[(xs[i] + xs[j]) / 2] = true;
+                    }
+                }
+            }
+
+            //int nx = xs.front() + 1;
+            int nx = 0;
             for (;; nx++) {
                 if (used[nx]) continue;
                 bool ok = true;
                 for (int x : xs) {
-                    if (dp[nx - x]) {
+                    if (dp[abs(nx - x)] | invalid[nx]) {
                         ok = false;
                         break;
                     }
                 }
                 if (ok) break;
             }
-            for (int x : xs) dp[nx - x] = true;
+            for (int x : xs) dp[abs(nx - x)] = true;
             ans.push_back(nx);
             used[nx] = true;
             node_val[v] = nx;
