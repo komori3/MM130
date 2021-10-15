@@ -71,7 +71,7 @@ public:
     void reset() { t = time(); }
     void pause() { tmp = time(); }
     void restart() { paused += time() - tmp; }
-    double elapsedMs() { return (time() - t - paused) * 1000.0; }
+    double elapsed_ms() { return (time() - t - paused) * 1000.0; }
 } timer;
 /* rand */
 struct Xorshift {
@@ -100,6 +100,10 @@ std::vector<std::string> split(std::string str, const std::string& delim) {
     while (iss >> buf) parsed.push_back(buf);
     return parsed;
 }
+template<typename T> bool chmax(T& a, const T& b) { if (a < b) { a = b; return true; } return false; }
+template<typename T> bool chmin(T& a, const T& b) { if (a > b) { a = b; return true; } return false; }
+
+
 
 using namespace std;
 
@@ -132,7 +136,7 @@ int main() {
     std::ios::sync_with_stdio(false);
     std::cin.tie(0);
 
-    //ifstream ifs("in/2.in");
+    //ifstream ifs("in/24.in");
     //istream& in = ifs;
     istream& in = cin;
 
@@ -140,55 +144,80 @@ int main() {
 
     // 完全ではないグラフで構築
     // bfs しながらやる
-    vector<int> ans({ 0 });
+    int best_score = INT_MAX;
+    vector<int> ans;
+    int start_node = 0;
+    int loop = 0;
+    while (true) {
+        double rap_start = timer.elapsed_ms();
 
-    vector<int> node_val(num_nodes, -1);
-    queue<int> qu;
-    node_val[0] = 0;
-    used[0] = true;
-    dp[0] = true;
-    qu.push(0);
-    while (!qu.empty()) {
-        int u = qu.front(); qu.pop();
-        for (int v : adjlist[u]) {
-            if (node_val[v] != -1) continue; // visited
-            // v に隣接するノードで、used のものの値を取ってくる
-            vector<int> xs;
-            for (int w : adjlist[v]) if (node_val[w] != -1) xs.push_back(node_val[w]);
-            sort(xs.rbegin(), xs.rend());
+        memset(invalid, 0, sizeof(invalid));
+        memset(used, 0, sizeof(used));
+        memset(dp, 0, sizeof(dp));
 
-            memset(invalid, 0, sizeof(invalid));
-            for (int i = 0; i < xs.size(); i++) {
-                for (int j = i; j < xs.size(); j++) {
-                    if ((xs[i] + xs[j]) % 2 == 0) {
-                        invalid[(xs[i] + xs[j]) / 2] = true;
+        vector<int> node_val(num_nodes, -1);
+        queue<int> qu;
+        node_val[start_node] = 0;
+        used[0] = true;
+        dp[0] = true;
+        qu.push(start_node);
+        while (!qu.empty()) {
+            int u = qu.front(); qu.pop();
+            for (int v : adjlist[u]) {
+                if (node_val[v] != -1) continue; // visited
+                // v に隣接するノードで、used のものの値を取ってくる
+                vector<int> xs;
+                for (int w : adjlist[v]) if (node_val[w] != -1) xs.push_back(node_val[w]);
+                sort(xs.rbegin(), xs.rend());
+
+                memset(invalid, 0, sizeof(invalid));
+                for (int i = 0; i < xs.size(); i++) {
+                    for (int j = i; j < xs.size(); j++) {
+                        if ((xs[i] + xs[j]) % 2 == 0) {
+                            invalid[(xs[i] + xs[j]) / 2] = true;
+                        }
                     }
                 }
-            }
 
-            //int nx = xs.front() + 1;
-            int nx = 0;
-            for (;; nx++) {
-                if (used[nx]) continue;
-                bool ok = true;
-                for (int x : xs) {
-                    if (dp[abs(nx - x)] | invalid[nx]) {
-                        ok = false;
-                        break;
+                //int nx = xs.front() + 1;
+                int nx = 0;
+                for (;; nx++) {
+                    if (used[nx]) continue;
+                    bool ok = true;
+                    for (int x : xs) {
+                        if (dp[abs(nx - x)] | invalid[nx]) {
+                            ok = false;
+                            break;
+                        }
                     }
+                    if (ok) break;
                 }
-                if (ok) break;
+                for (int x : xs) dp[abs(nx - x)] = true;
+                used[nx] = true;
+                node_val[v] = nx;
+                qu.push(v);
             }
-            for (int x : xs) dp[abs(nx - x)] = true;
-            ans.push_back(nx);
-            used[nx] = true;
-            node_val[v] = nx;
-            qu.push(v);
         }
-    }
+
+        int score = *max_element(node_val.begin(), node_val.end());
+        if (chmin(best_score, score)) {
+            ans = node_val;
+            dump(best_score);
+        }
+
+        loop++;
+
+        double rap_end = timer.elapsed_ms();
+        double rap_time = rap_end - rap_start;
+        if (timer.elapsed_ms() + rap_time > 9000) break;
+
+        start_node = rnd.next_int(num_nodes);
+    };
+
+    dump(loop, best_score);
 
     ostringstream out;
-    for (int x : node_val) {
+    for (int x : ans) {
         out << x << " ";
     }
 
