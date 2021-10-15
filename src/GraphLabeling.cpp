@@ -136,9 +136,9 @@ int main() {
     std::ios::sync_with_stdio(false);
     std::cin.tie(0);
 
-    //ifstream ifs("in/24.in");
-    //istream& in = ifs;
-    istream& in = cin;
+    ifstream ifs("in/7.in");
+    istream& in = ifs;
+    //istream& in = cin;
 
     init(in);
 
@@ -212,6 +212,7 @@ int main() {
         if (timer.elapsed_ms() + rap_time > 9000) break;
 
         start_node = rnd.next_int(num_nodes);
+        for (auto& v : adjlist) shuffle_vector(v, rnd);
     };
 
     dump(loop, best_score);
