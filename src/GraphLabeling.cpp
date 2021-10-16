@@ -85,7 +85,7 @@ struct Xorshift {
 /* shuffle */
 template<typename T>
 void shuffle_vector(std::vector<T>& v, Xorshift& rnd) {
-    int n = v.size();
+    int n = (int)v.size();
     for (int i = n - 1; i >= 1; i--) {
         int r = rnd.next_int(i);
         std::swap(v[i], v[r]);
@@ -128,51 +128,48 @@ void init(istream& in) {
     }
 }
 
-bool invalid[3000000];
-bool used[3000000];
-bool dp[3000000];
+struct State {
+    static constexpr int MAX = 3000000;
 
-int main() {
-    std::ios::sync_with_stdio(false);
-    std::cin.tie(0);
+    int score;
+    vector<int> node_vals;
 
-    ifstream ifs("in/7.in");
-    istream& in = ifs;
-    //istream& in = cin;
+    bool* invalid;
+    bool* used_node_val;
+    bool* used_edge_val;
 
-    init(in);
+    State() { 
+        invalid = new bool[MAX];
+        used_node_val = new bool[MAX];
+        used_edge_val = new bool[MAX];
+        reset();
+    }
 
-    // 完全ではないグラフで構築
-    // bfs しながらやる
-    int best_score = INT_MAX;
-    vector<int> ans;
-    int start_node = 0;
-    int loop = 0;
-    while (true) {
-        double rap_start = timer.elapsed_ms();
+    void reset() {
+        score = 0;
+        node_vals = vector<int>(num_nodes, -1);
+        memset(invalid, 0, sizeof(bool) * MAX);
+        memset(used_node_val, 0, sizeof(bool) * MAX);
+        memset(used_edge_val, 0, sizeof(bool) * MAX);
+    }
 
-        memset(invalid, 0, sizeof(invalid));
-        memset(used, 0, sizeof(used));
-        memset(dp, 0, sizeof(dp));
-
-        vector<int> node_val(num_nodes, -1);
+    void solve(int start_node) {
         queue<int> qu;
-        node_val[start_node] = 0;
-        used[0] = true;
-        dp[0] = true;
+        node_vals[start_node] = 0;
+        used_node_val[0] = true;
         qu.push(start_node);
         while (!qu.empty()) {
             int u = qu.front(); qu.pop();
             for (int v : adjlist[u]) {
-                if (node_val[v] != -1) continue; // visited
+                if (node_vals[v] != -1) continue; // visited
                 // v に隣接するノードで、used のものの値を取ってくる
                 vector<int> xs;
-                for (int w : adjlist[v]) if (node_val[w] != -1) xs.push_back(node_val[w]);
+                for (int w : adjlist[v]) if (node_vals[w] != -1) xs.push_back(node_vals[w]);
                 sort(xs.rbegin(), xs.rend());
 
-                memset(invalid, 0, sizeof(invalid));
-                for (int i = 0; i < xs.size(); i++) {
-                    for (int j = i; j < xs.size(); j++) {
+                memset(invalid, 0, sizeof(bool) * MAX);
+                for (int i = 0; i < (int)xs.size(); i++) {
+                    for (int j = i; j < (int)xs.size(); j++) {
                         if ((xs[i] + xs[j]) % 2 == 0) {
                             invalid[(xs[i] + xs[j]) / 2] = true;
                         }
@@ -182,26 +179,88 @@ int main() {
                 //int nx = xs.front() + 1;
                 int nx = 0;
                 for (;; nx++) {
-                    if (used[nx]) continue;
+                    if (used_node_val[nx]) continue;
                     bool ok = true;
                     for (int x : xs) {
-                        if (dp[abs(nx - x)] | invalid[nx]) {
+                        if (used_edge_val[abs(nx - x)] | invalid[nx]) {
                             ok = false;
                             break;
                         }
                     }
                     if (ok) break;
                 }
-                for (int x : xs) dp[abs(nx - x)] = true;
-                used[nx] = true;
-                node_val[v] = nx;
+                for (int x : xs) used_edge_val[abs(nx - x)] = true;
+                used_node_val[nx] = true;
+                node_vals[v] = nx;
                 qu.push(v);
             }
         }
+        score = *max_element(node_vals.begin(), node_vals.end());
+    }
 
-        int score = *max_element(node_val.begin(), node_val.end());
-        if (chmin(best_score, score)) {
-            ans = node_val;
+    void solve2(const vector<int>& perm) {
+        // bfs である必要はない
+        for (int u : perm) {
+            // u に隣接するノードで、used のものの値を取ってくる
+            vector<int> adj_node_vals;
+            for (int v : adjlist[u]) if (node_vals[v] != -1) adj_node_vals.push_back(node_vals[v]);
+            sort(adj_node_vals.begin(), adj_node_vals.end());
+            memset(invalid, 0, sizeof(bool) * MAX);
+            for (int i = 0; i < (int)adj_node_vals.size(); i++) {
+                for (int j = i; j < (int)adj_node_vals.size(); j++) {
+                    if ((adj_node_vals[i] + adj_node_vals[j]) % 2 == 0) {
+                        invalid[(adj_node_vals[i] + adj_node_vals[j]) / 2] = true;
+                    }
+                }
+            }
+            int node_val = 0;
+            for (;; node_val++) {
+                if (used_node_val[node_val]) continue;
+                bool ok = true;
+                for (int adj_node_val : adj_node_vals) {
+                    if (used_edge_val[abs(node_val - adj_node_val)] | invalid[node_val]) {
+                        ok = false;
+                        break;
+                    }
+                }
+                if (ok) break;
+            }
+            for (int adj_node_val : adj_node_vals) {
+                used_edge_val[abs(node_val - adj_node_val)] = true;
+            }
+            used_node_val[node_val] = true;
+            node_vals[u] = node_val;
+        }
+        score = *max_element(node_vals.begin(), node_vals.end());
+    }
+};
+
+int main() {
+    std::ios::sync_with_stdio(false);
+    std::cin.tie(0);
+
+    //ifstream ifs("in/69.in");
+    //istream& in = ifs;
+    istream& in = cin;
+
+    init(in);
+
+    dump(num_nodes, num_edges);
+
+    State state;
+    int best_score = INT_MAX;
+    int loop = 0;
+    vector<int> ans;
+    vector<int> perm(num_nodes);
+    for (int i = 0; i < num_nodes; i++) perm[i] = i;
+
+    while (true) {
+        double rap_start = timer.elapsed_ms();
+
+        state.solve2(perm);
+
+        if (chmin(best_score, state.score)) {
+            ans = state.node_vals;
             dump(best_score);
         }
 
@@ -211,9 +270,9 @@ int main() {
         double rap_time = rap_end - rap_start;
         if (timer.elapsed_ms() + rap_time > 9000) break;
 
-        start_node = rnd.next_int(num_nodes);
-        for (auto& v : adjlist) shuffle_vector(v, rnd);
-    };
+        shuffle_vector(perm, rnd);
+        state.reset();
+    }
 
     dump(loop, best_score);
 
