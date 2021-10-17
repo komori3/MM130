@@ -300,9 +300,9 @@ int main() {
     std::ios::sync_with_stdio(false);
     std::cin.tie(0);
 
-    ifstream ifs("in/30.in");
-    istream& in = ifs;
-    //istream& in = cin;
+    //ifstream ifs("in/30.in");
+    //istream& in = ifs;
+    istream& in = cin;
 
     init(in);
 
@@ -314,6 +314,9 @@ int main() {
     State state;
     vector<int> perm(num_nodes);
     for (int i = 0; i < num_nodes; i++) perm[i] = i;
+    sort(perm.begin(), perm.end(), [&](int u, int v) {
+        return adjlist[u].size() > adjlist[v].size();
+        });
 
     state.build(perm);
     {
