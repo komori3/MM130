@@ -107,18 +107,47 @@ template<typename T> bool chmin(T& a, const T& b) { if (a > b) { a = b; return t
 
 using namespace std;
 
+constexpr int NN = 500;
+
 int num_nodes;
 int num_edges;
 vector<pii> edges;
-vector<vector<bool>> adjmat;
+vector<bitset<NN>> adjmat;
 vector<vector<int>> adjlist;
+
+vector< int > maximum_independent_set(vector<bitset<NN>> bit, int trial = 30000) {
+    int N = num_nodes;
+    vector<int> ord(N);
+    iota(begin(ord), end(ord), 0);
+    int ret = 0;
+    bitset<NN> ver;
+    for (int i = 0; i < trial; i++) {
+        shuffle_vector(ord, rnd);
+        bitset<NN> used;
+        int add = 0;
+        for (int j : ord) {
+            if ((used & bit[j]).count()) continue;
+            used[j] = true;
+            ++add;
+        }
+        if (ret < add) {
+            ret = add;
+            ver = used;
+        }
+    }
+    vector< int > ans;
+    for (int i = 0; i < N; i++) {
+        if (ver[i]) ans.emplace_back(i);
+    }
+    return ans;
+}
 
 void init(istream& in) {
     in >> num_nodes;
     in >> num_edges;
     edges.resize(num_edges);
     in >> edges;
-    adjmat.resize(num_nodes, vector<bool>(num_nodes, false));
+    adjmat.resize(num_nodes);
     adjlist.resize(num_nodes);
     for (const auto& edge : edges) {
         int u, v; std::tie(u, v) = edge;
@@ -205,6 +234,7 @@ struct State {
         }
         used_node_val[node_val] = true;
         node_vals[u] = node_val;
+        //dump(u, node_val);
         return node_val;
     }
 
@@ -296,11 +326,80 @@ struct State {
     }
 };
 
+bool verify(const vector<int>& vals) {
+    int n = vals.size();
+    set<int> st;
+    for (int i = 0; i < n - 1; i++) {
+        for (int j = i + 1; j < n; j++) {
+            int e = abs(vals[i] - vals[j]);
+            if (st.count(e)) return false;
+            st.insert(e);
+        }
+    }
+    return true;
+}
+
+void dfs(int N, vector<int>& best, vector<int>& vals, vector<bool>& nused, vector<bool>& eused, int& cap) {
+    if (vals.size() == N) {
+        cap = *max_element(vals.begin(), vals.end());
+        best = vals;
+        return;
+    }
+    // i 個目
+    // cap-1 まで調べる
+    int nvstart = vals.empty() ? 0 : vals.back() + 1;
+    for (int nv = nvstart; nv < cap; nv++) {
+        if (nused[nv]) continue;
+        // x を採用する
+        bool ok = true;
+        if (!ok) continue;
+        for (int v : vals) {
+            if (eused[abs(v - nv)]) {
+                ok = false;
+                break;
+            }
+        }
+        if (!ok) continue;
+        
+        nused[nv] = true;
+        for (int v : vals) {
+            eused[abs(v - nv)] = true;
+        }
+        vals.push_back(nv);
+
+        dfs(N, best, vals, nused, eused, cap);
+
+        vals.pop_back();
+        for (int v : vals) {
+            eused[abs(v - nv)] = false;
+        }
+        nused[nv] = false;
+    }
+}
+
+vector<int> solve_brute_force_complete_graph(int N) {
+    
+    vector<int> vals, best;
+    vector<bool> nused(3000000, false), eused(3000000, false);
+    int cap = INT_MAX;
+
+    dfs(N, best, vals, nused, eused, cap);
+
+    return best;
+}
+
+int _main() {
+    for (int n = 2; n <= 10; n++) {
+        dump(n, solve_brute_force_complete_graph(n));
+    }
+    return 0;
+}
+
 int main() {
     std::ios::sync_with_stdio(false);
     std::cin.tie(0);
 
-    //ifstream ifs("in/30.in");
+    //ifstream ifs("in/10.in");
     //istream& in = ifs;
     istream& in = cin;
 
@@ -312,6 +411,18 @@ int main() {
     }
 
     State state;
+
+    //vector<int> perm(maxind.begin(), maxind.end());
+    //sort(perm.begin(), perm.end(), [&](int u, int v) {
+    //    return adjlist[u].size() > adjlist[v].size();
+    //    });
+    //for (int i = 0; i < num_nodes; i++) {
+    //    if (!count(maxind.begin(), maxind.end(), i)) perm.push_back(i);
+    //}
+    //sort(perm.begin() + maxind.size(), perm.end(), [&](int u, int v) {
+    //    return adjlist[u].size() > adjlist[v].size();
+    //    });
+
     vector<int> perm(num_nodes);
     for (int i = 0; i < num_nodes; i++) perm[i] = i;
     sort(perm.begin(), perm.end(), [&](int u, int v) {
