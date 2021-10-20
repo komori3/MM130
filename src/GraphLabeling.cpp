@@ -119,7 +119,7 @@ vector<bitset<NN>> adjmat;
 vector<vector<int>> adjlist;
 
 
-vector< int > maximum_independent_set(vector<bitset<NN>> bit, int trial = 30000) {
+vector<int> maximum_independent_set(vector<bitset<NN>> bit, int trial = 30000) {
     int N = num_nodes;
     vector<int> ord(N);
     iota(begin(ord), end(ord), 0);
@@ -659,6 +659,8 @@ void init(istream& in) {
         adjlist[v].push_back(u);
     }
     init_golomb();
+    double density = (double)num_edges / ((num_nodes) * (num_nodes - 1) / 2);
+    dump(num_nodes, num_edges, density);
 }
 
 struct State {
@@ -678,11 +680,12 @@ struct State {
         clear();
     }
 
-    void init_by_golomb(const vector<int>& golomb) {
-        for (int u = 0; u < num_nodes; u++) {
-            set(u, golomb[u]);
-        }
-        set_score();
+    void clear() {
+        score = 0;
+        node_vals = vector<int>(num_nodes, -1);
+        memset(invalid, 0, sizeof(bool) * capacity);
+        memset(used_node_val, 0, sizeof(bool) * capacity);
+        memset(used_edge_val, 0, sizeof(bool) * capacity);
     }
 
     void shrink(int size) {
@@ -700,22 +703,17 @@ struct State {
         capacity = size;
     }
 
-    void clear() {
-        score = 0;
-        node_vals = vector<int>(num_nodes, -1);
-        memset(invalid, 0, sizeof(bool) * capacity);
-        memset(used_node_val, 0, sizeof(bool) * capacity);
-        memset(used_edge_val, 0, sizeof(bool) * capacity);
-    }
-
     int set_min(int u) {
+        // 小さい value から置けるか試していく
         vector<int> adj_node_vals;
+        // 決定済み近傍ノードの value リスト
         for (int v : adjlist[u]) {
             if (node_vals[v] != -1) {
                 adj_node_vals.push_back(node_vals[v]);
             }
         }
-        sort(adj_node_vals.begin(), adj_node_vals.end());
+        // 中間の値は invalid
+        stable_sort(adj_node_vals.begin(), adj_node_vals.end());
         memset(invalid, 0, sizeof(bool) * capacity);
         for (int i = 0; i < (int)adj_node_vals.size(); i++) {
             for (int j = i; j < (int)adj_node_vals.size(); j++) {
@@ -724,12 +722,13 @@ struct State {
                 }
             }
         }
+        // 順に試す
         int node_val = -1;
         for (int val = 0; val < capacity; val++) {
-            if (used_node_val[val]) continue;
+            if (used_node_val[val] | invalid[val]) continue;
             bool ok = true;
             for (int adj_node_val : adj_node_vals) {
-                if (used_edge_val[abs(val - adj_node_val)] | invalid[val]) {
+                if (used_edge_val[abs(val - adj_node_val)]) {
                     ok = false;
                     break;
                 }
@@ -739,13 +738,14 @@ struct State {
                 break;
             }
         }
+        // 設定した上限を上回ったら探索を打ち切る
         if (node_val == -1) return -1;
+        // update
         for (int adj_node_val : adj_node_vals) {
             used_edge_val[abs(node_val - adj_node_val)] = true;
         }
         used_node_val[node_val] = true;
         node_vals[u] = node_val;
-        //dump(u, node_val);
         return node_val;
     }
 
@@ -776,12 +776,13 @@ struct State {
         score = *max_element(node_vals.begin(), node_vals.end());
     }
 
-    vector<int> kick(vector<int> node_ids) {
+    vector<int> replace(vector<int> node_ids) {
         vector<int> prev_vals;
         for (int u : node_ids) {
             prev_vals.push_back(reset(u));
         }
         for (int i = 0; i < (int)node_ids.size(); i++) {
+            // capacity を超えたら revert
             if (set_min(node_ids[i]) == -1) {
                 for (int j = i - 1; j >= 0; j--) {
                     reset(node_ids[j]);
@@ -796,19 +797,6 @@ struct State {
         return prev_vals;
     }
 
-    void verify() const {
-        assert((int)node_vals.size() == num_nodes);
-        assert(score == *max_element(node_vals.begin(), node_vals.end()));
-        assert(count(node_vals.begin(), node_vals.end(), -1) == 0);
-        int nused = 0, eused = 0;
-        for (int i = 0; i < capacity; i++) {
-            nused += used_node_val[i];
-            eused += used_edge_val[i];
-        }
-        assert(nused == num_nodes);
-        assert(eused == num_edges);
-    }
-
     void undo(const vector<int>& node_ids, const vector<int>& prev_vals) {
         for (int u : node_ids) {
             reset(u);
@@ -819,93 +807,84 @@ struct State {
         set_score();
     }
 
-    void build(const vector<int>& perm) {
-        for (int u : perm) set_min(u);
+    bool build(const vector<int>& perm) {
+        for (int u : perm) {
+            int res = set_min(u);
+            if (res == -1) {
+                clear();
+                return false;
+            }
+        }
+        set_score();
+        return true;
+    }
+
+    void build_golomb(const vector<int>& golomb, const vector<int>& perm) {
+        for (int i = 0; i < num_nodes; i++) {
+            set(perm[i], golomb[i]);
+        }
         set_score();
     }
 
     int get_max_node_id() const {
         return max_element(node_vals.begin(), node_vals.end()) - node_vals.begin();
     }
-
-    void print() const {
-        dump(score);
-        dump(node_vals);
-        dump(invalid);
-        dump(used_node_val);
-        dump(used_edge_val);
-    }
 };
 
-bool verify(const vector<int>& vals) {
-    int n = vals.size();
-    set<int> st;
-    for (int i = 0; i < n - 1; i++) {
-        for (int j = i + 1; j < n; j++) {
-            int e = abs(vals[i] - vals[j]);
-            if (st.count(e)) return false;
-            st.insert(e);
-        }
-    }
-    return true;
-}
+namespace NExperimental {
 
-void dfs(int N, vector<int>& best, vector<int>& vals, vector<bool>& nused, vector<bool>& eused, int& cap) {
-    if (vals.size() == N) {
-        cap = *max_element(vals.begin(), vals.end());
-        best = vals;
-        return;
-    }
-    // i 個目
-    // cap-1 まで調べる
-    int nvstart = vals.empty() ? 0 : vals.back() + 1;
-    for (int nv = nvstart; nv < cap; nv++) {
-        if (nused[nv]) continue;
-        // x を採用する
-        bool ok = true;
-        if (!ok) continue;
-        for (int v : vals) {
-            if (eused[abs(v - nv)]) {
-                ok = false;
-                break;
+    void dfs(int N, vector<int>& best, vector<int>& vals, vector<bool>& nused, vector<bool>& eused, int& cap) {
+        if ((int)vals.size() == N) {
+            cap = *max_element(vals.begin(), vals.end());
+            best = vals;
+            return;
+        }
+        // i 個目
+        // cap-1 まで調べる
+        int nvstart = vals.empty() ? 0 : vals.back() + 1;
+        for (int nv = nvstart; nv < cap; nv++) {
+            if (nused[nv]) continue;
+            // x を採用する
+            bool ok = true;
+            if (!ok) continue;
+            for (int v : vals) {
+                if (eused[abs(v - nv)]) {
+                    ok = false;
+                    break;
+                }
             }
-        }
-        if (!ok) continue;
+            if (!ok) continue;
 
-        nused[nv] = true;
-        for (int v : vals) {
-            eused[abs(v - nv)] = true;
+            nused[nv] = true;
+            for (int v : vals) {
+                eused[abs(v - nv)] = true;
+            }
+            vals.push_back(nv);
+
+            dfs(N, best, vals, nused, eused, cap);
+
+            vals.pop_back();
+            for (int v : vals) {
+                eused[abs(v - nv)] = false;
+            }
+            nused[nv] = false;
         }
-        vals.push_back(nv);
+    }
+
+    vector<int> solve_brute_force_complete_graph(int N) {
+
+        vector<int> vals, best;
+        vector<bool> nused(3000000, false), eused(3000000, false);
+        int cap = INT_MAX;
 
         dfs(N, best, vals, nused, eused, cap);
 
-        vals.pop_back();
-        for (int v : vals) {
-            eused[abs(v - nv)] = false;
-        }
-        nused[nv] = false;
+        return best;
     }
+
 }
 
-vector<int> solve_brute_force_complete_graph(int N) {
-
-    vector<int> vals, best;
-    vector<bool> nused(3000000, false), eused(3000000, false);
-    int cap = INT_MAX;
-
-    dfs(N, best, vals, nused, eused, cap);
-
-    return best;
-}
-
-
-
-
-int _main() {
-    std::ios::sync_with_stdio(false);
-    std::cin.tie(0);
-
+void dump_golomb_rulers() {
     ifstream ifs("data/rulers-all-00");
     istream& in = ifs;
 
@@ -926,8 +905,6 @@ int _main() {
         oss << "};\n";
         cout << oss.str();
     }
-
-    return 0;
 }
 
 int main() {
@@ -940,88 +917,68 @@ int main() {
 
     init(in);
 
-    {
-        double density = (double)num_edges / ((num_nodes) * (num_nodes - 1) / 2);
-        dump(num_nodes, num_edges, density);
-    }
-
     State state;
+    // golomb で抑えられる
+    state.shrink(golomb[num_nodes].back() + 1); 
 
-    //vector<int> perm(maxind.begin(), maxind.end());
-    //sort(perm.begin(), perm.end(), [&](int u, int v) {
-    //    return adjlist[u].size() > adjlist[v].size();
-    //    });
-    //for (int i = 0; i < num_nodes; i++) {
-    //    if (!count(maxind.begin(), maxind.end(), i)) perm.push_back(i);
-    //}
-    //sort(perm.begin() + maxind.size(), perm.end(), [&](int u, int v) {
-    //    return adjlist[u].size() > adjlist[v].size();
-    //    });
-
+    // 次数の多いノードから埋めていくと結果が良くなる
     vector<int> perm(num_nodes);
-    for (int i = 0; i < num_nodes; i++) perm[i] = i;
-    sort(perm.begin(), perm.end(), [&](int u, int v) {
+    iota(begin(perm), end(perm), 0);
+    stable_sort(perm.begin(), perm.end(), [&](int u, int v) {
         return adjlist[u].size() > adjlist[v].size();
         });
 
-    //state.build(perm);
-    state.init_by_golomb(golomb[num_nodes]);
-    {
-        int size = state.score + 1;
-        //chmax(size, 100);
-        dump(size);
-        state.shrink(size);
+    // 初期解構築
+    if(!state.build(perm)) {
+        // golomb 以上になった場合
+        state.build_golomb(golomb[num_nodes], perm);
+    }
+    state.shrink(state.score + 1);
+
+    dump(state.score, timer.elapsed_ms());
+
+    auto get_temp = [](double start_temp, double end_temp, double now_time, double end_time) {
+        return end_temp + (start_temp - end_temp) * (end_time - now_time) / end_time;
+    };
+
+    // annealing
+    int best_score = state.score, loop = 0;
+    vector<int> ans = state.node_vals;
+    double t, T = 9000;
+    while ((t = timer.elapsed_ms()) < T) {
+        int prev_score = state.score;
+        // 5 個ランダムにピックアップ
+        shuffle_vector(perm, rnd);
+        vector<int> node_ids(perm.begin(), perm.begin() + min(num_nodes, 5));
+        // 最大 value のノードは必ず含むようにする
+        int max_node_id = state.get_max_node_id();
+        if (!count(node_ids.begin(), node_ids.end(), max_node_id)) {
+            node_ids[rnd.next_int(node_ids.size())] = max_node_id;
+        }
+        // 再配置
+        vector<int> prev_vals = state.replace(node_ids);
+        if (prev_vals.empty()) continue;
+        // 受理判定
+        int now_score = state.score;
+        int diff = now_score - prev_score;
+        double temp = get_temp(10.0, 0.0, t, T);
+        double prob = exp(-diff / temp);
+        if (prob > rnd.next_double()) {
+            if (now_score < best_score) {
+                ans = state.node_vals;
+                best_score = state.score;
+                dump(best_score);
+            }
+        }
+        else {
+            state.undo(node_ids, prev_vals);
+        }
+
+        loop++;
+        if (loop % 10000 == 0) dump(loop, best_score);
     }
 
-    int best_score = state.score;
-
-    int loop = 0;
-    vector<int> ans = state.node_vals;
-
-    dump(best_score);
-
-    //auto get_temp = [](double start_temp, double end_temp, double now_time, double end_time) {
-    //    return end_temp + (start_temp - end_temp) * (end_time - now_time) / end_time;
-    //};
-
-    //double t, T = 9000;
-    //while ((t = timer.elapsed_ms()) < T) {
-    //    int prev_score = state.score;
-
-    //    shuffle_vector(perm, rnd);
-    //    vector<int> node_ids(perm.begin(), perm.begin() + min(num_nodes, 5));
-    //    int max_node_id = state.get_max_node_id();
-    //    if (!count(node_ids.begin(), node_ids.end(), max_node_id)) {
-    //        node_ids[rnd.next_int(node_ids.size())] = max_node_id;
-    //    }
-
-    //    vector<int> prev_vals = state.kick(node_ids);
-    //    if (prev_vals.empty()) continue;
-
-    //    int now_score = state.score;
-    //    int diff = now_score - prev_score;
-    //    double temp = get_temp(10.0, 0.0, t, T);
-    //    double prob = exp(-diff / temp);
-
-    //    if (prob > rnd.next_double()) {
-    //        if (now_score < best_score) {
-    //            ans = state.node_vals;
-    //            best_score = state.score;
-    //            dump(best_score);
-    //        }
-    //    }
-    //    else {
-    //        state.undo(node_ids, prev_vals);
-    //    }
-
-    //    loop++;
-
-    //    if (loop % 10000 == 0) {
-    //        dump(loop, best_score);
-    //    }
-    //}
-
-    //dump(loop, best_score);
+    dump(loop, best_score);
 
     ostringstream out;
     for (int x : ans) {
