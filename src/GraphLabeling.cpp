@@ -117,6 +117,8 @@ int num_edges;
 vector<pii> edges;
 vector<bitset<NN>> adjmat;
 vector<vector<int>> adjlist;
+vector<int> degree;
+vector<int> degree2;
 
 
 vector<int> maximum_independent_set(vector<bitset<NN>> bit, int trial = 30000) {
@@ -658,6 +660,14 @@ void init(istream& in) {
         adjlist[u].push_back(v);
         adjlist[v].push_back(u);
     }
+    degree.resize(num_nodes);
+    degree2.resize(num_nodes, 0);
+    for (int u = 0; u < num_nodes; u++) {
+        degree[u] = adjlist[u].size();
+        for (int v : adjlist[u]) {
+            degree2[u] += adjlist[v].size();
+        }
+    }
     init_golomb();
     double density = (double)num_edges / ((num_nodes) * (num_nodes - 1) / 2);
     dump(num_nodes, num_edges, density);
@@ -925,7 +935,7 @@ int main() {
     vector<int> perm(num_nodes);
     iota(begin(perm), end(perm), 0);
     stable_sort(perm.begin(), perm.end(), [&](int u, int v) {
-        return adjlist[u].size() > adjlist[v].size();
+        return degree[u] == degree[v] ? degree2[u] < degree2[v] : degree[u] > degree[v];
         });
 
     // 初期解構築
